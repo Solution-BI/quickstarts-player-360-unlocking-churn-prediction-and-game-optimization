@@ -1,9 +1,9 @@
-USE ROLE SYSADMIN;
-USE WAREHOUSE PLAYER_360_BUILD_WH;
-USE SCHEMA PLAYER_360.ANALYTIC;
+USE ROLE "SF_APA_SANDBOX-QUICKSTARTS";
+USE WAREHOUSE SANDBOX_DB;
+USE SCHEMA QUICKSTARTS_DB.PLAYER_360;
 
 -- 1. Create Dynamic Table Representing the Rentention Information
-create or replace dynamic table PLAYER_360.ANALYTIC.RETENTION(
+create or replace dynamic table QUICKSTARTS_DB.PLAYER_360.RETENTION(
 	USER_ID,
 	FIRST_LOGIN_DATE,
 	LAST_LOGIN_DATE,
@@ -14,7 +14,7 @@ create or replace dynamic table PLAYER_360.ANALYTIC.RETENTION(
 	LOGGED_IN_IN_LAST_30_DAYS,
 	DAYS_SINCE_LAST_LOGIN,
 	CHURNED
-) target_lag = '1 days' refresh_mode = AUTO initialize = ON_CREATE warehouse = PLAYER_360_BUILD_WH
+) target_lag = '1 days' refresh_mode = AUTO initialize = ON_CREATE warehouse = SANDBOX_DB
  as
 WITH first_login AS (
     SELECT
@@ -22,7 +22,7 @@ WITH first_login AS (
         MIN(LOG_IN) AS first_login_date,
         MAX(LOG_IN) AS last_login_date,
         COUNT(*) AS total_logins
-    FROM PLAYER_360.RAW.SESSIONS
+    FROM QUICKSTARTS_DB.PLAYER_360.SESSIONS
     GROUP BY user_ID
 ),
 login_activity AS (
@@ -37,7 +37,7 @@ login_activity AS (
         IFF(MAX(e.LOG_IN >= DATEADD(day, -30, CURRENT_DATE())), TRUE, FALSE) AS logged_in_in_last_30_days,
         DATEDIFF(day, f.last_login_date, CURRENT_DATE()) AS days_since_last_login
     FROM first_login f
-    LEFT JOIN PLAYER_360.RAW.SESSIONS e ON e.user_ID = f.user_ID
+    LEFT JOIN QUICKSTARTS_DB.PLAYER_360.SESSIONS e ON e.user_ID = f.user_ID
     GROUP BY f.user_ID, f.first_login_date, f.last_login_date, f.total_logins
 )
 SELECT *,
@@ -45,11 +45,11 @@ SELECT *,
 FROM login_activity;
 
 -- 2. Create the Points Mapping Table to give Points Metrics 
-CREATE OR REPLACE TABLE PLAYER_360.ANALYTIC.POINTS_MAPPING_TABLE (
+CREATE OR REPLACE TABLE QUICKSTARTS_DB.PLAYER_360.POINTS_MAPPING_TABLE (
     EVENT STRING,
     POINTS FLOAT 
 ); 
-INSERT INTO PLAYER_360.ANALYTIC.POINTS_MAPPING_TABLE (EVENT, POINTS)
+INSERT INTO QUICKSTARTS_DB.PLAYER_360.POINTS_MAPPING_TABLE (EVENT, POINTS)
 VALUES ('Assists', 0.2),
        ('Boosts', 0.1),
        ('Damage Dealt', .1),
@@ -60,8 +60,8 @@ VALUES ('Assists', 0.2),
        ('Heals',.2);
 
 -- 3. CREATE Dynamic Table Presenting Points Per Event
-CREATE OR REPLACE DYNAMIC TABLE PLAYER_360.ANALYTIC.points_per_event
-WAREHOUSE = PLAYER_360_BUILD_WH
+CREATE OR REPLACE DYNAMIC TABLE QUICKSTARTS_DB.PLAYER_360.points_per_event
+WAREHOUSE = SANDBOX_DB
 TARGET_LAG = '5 minute'
 REFRESH_MODE = AUTO
 INITIALIZE = ON_CREATE
@@ -80,7 +80,7 @@ WITH player_points_per_event AS (
         ge.HEADSHOTS * (SELECT points FROM points_mapping_table WHERE event = 'Head Shots') AS headshot_points,
         ge.HEALS * (SELECT points FROM points_mapping_table WHERE event = 'Heals') AS heals_points
     FROM
-        PLAYER_360.RAW.GAME_EVENTS ge
+        QUICKSTARTS_DB.PLAYER_360.GAME_EVENTS ge
 ),
 player_points_per_session AS (
     -- Step 2: Sum up the total points for each user and show a breakdown of points by event type
@@ -117,15 +117,15 @@ SELECT
         HEALS_POINTS,
         TOTAL_POINTS
 FROM player_points_per_session pps
-LEFT JOIN PLAYER_360.RAW.SESSIONS s 
+LEFT JOIN QUICKSTARTS_DB.PLAYER_360.SESSIONS s 
 ON pps.SESSION_ID = s.session_id;
 
 -- 4. We aggregate the points for the player across all sessions
-create or replace dynamic table PLAYER_360.ANALYTIC.points_per_user
+create or replace dynamic table QUICKSTARTS_DB.PLAYER_360.points_per_user
     TARGET_LAG = '5 minutes'
     refresh_mode = AUTO
     initialize = ON_CREATE
-    warehouse = PLAYER_360_BUILD_WH
+    warehouse = SANDBOX_DB
     as
 SELECT
     USER_ID,
@@ -148,14 +148,14 @@ SELECT
         COALESCE(HEALS_POINTS, 0)
     ) AS TOTAL_POINTS
 FROM
-    PLAYER_360.ANALYTIC.points_per_event
+    QUICKSTARTS_DB.PLAYER_360.points_per_event
 GROUP BY
     USER_ID
 ORDER BY
     USER_ID;
 
 -- 5. We create player rankings
-CREATE OR REPLACE TABLE PLAYER_360.ANALYTIC.RANKING_MAPPING_TABLE (
+CREATE OR REPLACE TABLE QUICKSTARTS_DB.PLAYER_360.RANKING_MAPPING_TABLE (
     RANK_NAME STRING,
     LOWER_BOUND FLOAT,
     UPPER_BOUND FLOAT
@@ -172,12 +172,12 @@ WITH percentile_values_cte AS (
         PERCENTILE_CONT(0.875) WITHIN GROUP (ORDER BY TOTAL_POINTS) AS p87_5,
         MAX(TOTAL_POINTS) AS p100
     FROM
-        PLAYER_360.ANALYTIC.POINTS_PER_USER
+        QUICKSTARTS_DB.PLAYER_360.POINTS_PER_USER
 )
 SELECT * FROM percentile_values_cte;
 -- Step 4: Populate the Ranking Mapping Table
 -- Insert rank definitions into the ranking mapping table using the calculated percentiles
-INSERT INTO PLAYER_360.ANALYTIC.RANKING_MAPPING_TABLE (RANK_NAME, LOWER_BOUND, UPPER_BOUND)
+INSERT INTO QUICKSTARTS_DB.PLAYER_360.RANKING_MAPPING_TABLE (RANK_NAME, LOWER_BOUND, UPPER_BOUND)
 WITH rank_definitions AS (
     SELECT
         'Bronze' AS RANK_NAME, 0 AS LOWER_BOUND, p12_5 AS UPPER_BOUND FROM percentile_values
@@ -211,12 +211,12 @@ FROM
     rank_definitions;
 
 -- 6. Create a Dynamic Table for USER_RANKINGS
-CREATE OR REPLACE DYNAMIC TABLE PLAYER_360.ANALYTIC.USER_RANKINGS(
+CREATE OR REPLACE DYNAMIC TABLE QUICKSTARTS_DB.PLAYER_360.USER_RANKINGS(
     USER_ID,
     TOTAL_POINTS,
     RANK_NAME,
     PERCENTILE
-) TARGET_LAG = '1 days' refresh_mode = AUTO initialize = ON_CREATE warehouse = PLAYER_360_BUILD_WH
+) TARGET_LAG = '1 days' refresh_mode = AUTO initialize = ON_CREATE warehouse = SANDBOX_DB
 AS
 WITH RankedPlayers AS (
     SELECT
@@ -226,9 +226,9 @@ WITH RankedPlayers AS (
         RANK() OVER (ORDER BY utp.TOTAL_POINTS DESC) AS PlayerRank,
         COUNT(*) OVER () AS TotalPlayers
     FROM
-        PLAYER_360.ANALYTIC.points_per_user utp
+        QUICKSTARTS_DB.PLAYER_360.points_per_user utp
     LEFT JOIN
-        PLAYER_360.ANALYTIC.RANKING_MAPPING_TABLE drm
+        QUICKSTARTS_DB.PLAYER_360.RANKING_MAPPING_TABLE drm
     ON
         utp.TOTAL_POINTS >= drm.LOWER_BOUND
         AND utp.TOTAL_POINTS < drm.UPPER_BOUND
@@ -245,7 +245,7 @@ ORDER BY
     USER_ID;
 
 -- 7. We create player demographics information
-create or replace dynamic table PLAYER_360.ANALYTIC.DEMOGRAPHICS(
+create or replace dynamic table QUICKSTARTS_DB.PLAYER_360.DEMOGRAPHICS(
 	USER_ID,
     FULL_NAME,
 	AGE,
@@ -258,7 +258,7 @@ create or replace dynamic table PLAYER_360.ANALYTIC.DEMOGRAPHICS(
 	IS_SPENDER,
 	AVG_PURCHASE_AMOUNT_PER_AD,
     HAS_SUPPORT_TICKET
-) TARGET_LAG = '1 days' refresh_mode = AUTO initialize = ON_CREATE warehouse = PLAYER_360_BUILD_WH
+) TARGET_LAG = '1 days' refresh_mode = AUTO initialize = ON_CREATE warehouse = SANDBOX_DB
  as
 WITH user_activity AS (
     -- Aggregate player activity to figure out if they are hardcore or casual
@@ -269,7 +269,7 @@ WITH user_activity AS (
         COUNT(DISTINCT(DATE_TRUNC('week', e.LOG_IN))) AS active_weeks,
         total_sessions/active_weeks AS average_sessions_per_active_week,
         total_session_duration/total_sessions AS average_session_duration
-    FROM PLAYER_360.RAW.SESSIONS e
+    FROM QUICKSTARTS_DB.PLAYER_360.SESSIONS e
     GROUP BY e.user_ID
 ),
 user_spending AS (
@@ -279,7 +279,7 @@ user_spending AS (
         COUNT(p.purchase_ID) AS total_ads,
         IFF(COUNT(CASE WHEN p.purchase_type != 'none' THEN p.purchase_id END) > 2, TRUE, FALSE) AS is_spender,
         COALESCE(AVG(p.purchase_amount), 0) AS avg_purchase_amount_per_ad -- Calculate average purchase amount
-    FROM PLAYER_360.RAW.purchases p
+    FROM QUICKSTARTS_DB.PLAYER_360.purchases p
     GROUP BY p.user_ID
 ),
 user_engagement AS (
@@ -307,14 +307,14 @@ SELECT
     us.is_spender, -- Whether the user is a spender (more than 2 purchases)
     us.avg_purchase_amount_per_ad, -- Average purchase amount
     st.user_id IS NOT NULL AS has_support_ticket
-FROM PLAYER_360.RAW.users u
+FROM QUICKSTARTS_DB.PLAYER_360.users u
 LEFT JOIN user_engagement ue ON u.user_ID = ue.user_ID
 LEFT JOIN user_spending us ON u.user_ID = us.user_ID
 LEFT JOIN user_activity ua ON u.user_id = ua.user_ID
-LEFT JOIN PLAYER_360.RAW.support_tickets st ON u.user_ID = st.user_ID;
+LEFT JOIN QUICKSTARTS_DB.PLAYER_360.support_tickets st ON u.user_ID = st.user_ID;
 
 -- 8. Create Ad information over past 30 days
-CREATE OR REPLACE DYNAMIC TABLE PLAYER_360.ANALYTIC.AD_ENGAGEMENT (
+CREATE OR REPLACE DYNAMIC TABLE QUICKSTARTS_DB.PLAYER_360.AD_ENGAGEMENT (
     USER_ID,
     TOTAL_ADS,
     TOTAL_PURCHASES,
@@ -332,7 +332,7 @@ CREATE OR REPLACE DYNAMIC TABLE PLAYER_360.ANALYTIC.AD_ENGAGEMENT (
 TARGET_LAG = '5 minutes' 
 REFRESH_MODE = AUTO 
 INITIALIZE = ON_CREATE 
-WAREHOUSE = PLAYER_360_BUILD_WH
+WAREHOUSE = SANDBOX_DB
 AS
 SELECT 
     USER_ID,
@@ -385,36 +385,36 @@ SELECT
              THEN AD_ENGAGEMENT_TIME END) AS average_ad_engagement_time_last_30_days
     
 FROM 
-    PLAYER_360.RAW.PURCHASES
+    QUICKSTARTS_DB.PLAYER_360.PURCHASES
 GROUP BY 
     USER_ID;
 
-USE ROLE SYSADMIN;
-USE WAREHOUSE PLAYER_360_BUILD_WH;
-USE SCHEMA PLAYER_360.ANALYTIC;
+USE ROLE "SF_APA_SANDBOX-QUICKSTARTS";
+USE WAREHOUSE SANDBOX_DB;
+USE SCHEMA QUICKSTARTS_DB.PLAYER_360;
 
-CREATE OR REPLACE VIEW PLAYER_360.ANALYTIC.country_count
+CREATE OR REPLACE VIEW QUICKSTARTS_DB.PLAYER_360.country_count
 AS
 SELECT 
     LOCATION AS COUNTRY,
     COUNT(USER_ID) AS TOTAL_PLAYERS
 FROM 
-    PLAYER_360.RAW.USERS
+    QUICKSTARTS_DB.PLAYER_360.USERS
 GROUP BY 
     LOCATION;
 
 
-CREATE OR REPLACE TABLE PLAYER_360.ANALYTIC.daily_active_users (
+CREATE OR REPLACE TABLE QUICKSTARTS_DB.PLAYER_360.daily_active_users (
     active_date DATE,         -- The date for the daily activity
     active_user_count INT     -- The number of active users on that date
 );
 -- Insert or update the daily active users table
-MERGE INTO PLAYER_360.ANALYTIC.daily_active_users AS dau
+MERGE INTO QUICKSTARTS_DB.PLAYER_360.daily_active_users AS dau
 USING (
     SELECT
         CAST(LOG_IN AS DATE) AS active_date,    -- Extract the date part from LOG_IN timestamp
         COUNT(DISTINCT USER_ID) AS active_user_count -- Count unique users for that day
-    FROM PLAYER_360.RAW.SESSIONS
+    FROM QUICKSTARTS_DB.PLAYER_360.SESSIONS
     GROUP BY CAST(LOG_IN AS DATE)    -- Group by the date part of the login timestamp
 ) AS daily_activity
 ON dau.active_date = daily_activity.active_date
@@ -426,15 +426,15 @@ WHEN NOT MATCHED THEN
     VALUES (daily_activity.active_date, daily_activity.active_user_count);
 
 CREATE OR REPLACE TASK update_daily_active_users
-  WAREHOUSE = PLAYER_360_BUILD_WH
+  WAREHOUSE = SANDBOX_DB
   SCHEDULE = 'USING CRON 0 0 * * * UTC' -- Runs daily at midnight UTC
 AS
-    MERGE INTO PLAYER_360.ANALYTIC.daily_active_users AS dau
+    MERGE INTO QUICKSTARTS_DB.PLAYER_360.daily_active_users AS dau
     USING (
         SELECT
             CAST(LOG_IN AS DATE) AS active_date,
             COUNT(DISTINCT USER_ID) AS active_user_count
-        FROM PLAYER_360.RAW.SESSIONS
+        FROM QUICKSTARTS_DB.PLAYER_360.SESSIONS
         WHERE LOG_IN >= CURRENT_DATE - INTERVAL '7 DAY'
         GROUP BY CAST(LOG_IN AS DATE)
     ) AS daily_activity
@@ -445,18 +445,18 @@ AS
         INSERT (active_date, active_user_count) 
         VALUES (daily_activity.active_date, daily_activity.active_user_count);
 
-CREATE OR REPLACE TABLE PLAYER_360.ANALYTIC.monthly_active_users (
+CREATE OR REPLACE TABLE QUICKSTARTS_DB.PLAYER_360.monthly_active_users (
     active_month DATE,         -- The month for which we are tracking active users (first day of the month)
     active_user_count INT      -- The number of active users in that month
 );
 
 -- Insert or update the monthly active users table
-MERGE INTO PLAYER_360.ANALYTIC.monthly_active_users AS mau
+MERGE INTO QUICKSTARTS_DB.PLAYER_360.monthly_active_users AS mau
 USING (
     SELECT
         DATE_TRUNC('MONTH', LOG_IN) AS active_month, -- Truncate the LOG_IN date to the first day of the month
         COUNT(DISTINCT USER_ID) AS active_user_count -- Count unique users who logged in that month
-    FROM PLAYER_360.RAW.SESSIONS
+    FROM QUICKSTARTS_DB.PLAYER_360.SESSIONS
     --WHERE LOG_IN >= CURRENT_DATE - INTERVAL '12 MONTH' -- Optional: Track the last 12 months (adjust as needed)
     GROUP BY DATE_TRUNC('MONTH', LOG_IN) -- Group by the truncated month
 ) AS monthly_activity
@@ -469,15 +469,15 @@ WHEN NOT MATCHED THEN
     VALUES (monthly_activity.active_month, monthly_activity.active_user_count);
 
 CREATE OR REPLACE TASK update_monthly_active_users
-  WAREHOUSE = PLAYER_360_BUILD_WH
+  WAREHOUSE = SANDBOX_DB
   SCHEDULE = 'USING CRON 0 0 1 * * UTC' -- Runs on the 1st day of each month at midnight UTC
 AS
-    MERGE INTO PLAYER_360.ANALYTIC.monthly_active_users AS mau
+    MERGE INTO QUICKSTARTS_DB.PLAYER_360.monthly_active_users AS mau
     USING (
         SELECT
             DATE_TRUNC('MONTH', LOG_IN) AS active_month,
             COUNT(DISTINCT USER_ID) AS active_user_count
-        FROM PLAYER_360.RAW.SESSIONS
+        FROM QUICKSTARTS_DB.PLAYER_360.SESSIONS
         WHERE LOG_IN >= CURRENT_DATE - INTERVAL '2 MONTH'
         GROUP BY DATE_TRUNC('MONTH', LOG_IN)
     ) AS monthly_activity
@@ -488,13 +488,13 @@ AS
         INSERT (active_month, active_user_count) 
         VALUES (monthly_activity.active_month, monthly_activity.active_user_count);
 
-USE ROLE ACCOUNTADMIN;
+USE ROLE "SF_APA_SANDBOX-QUICKSTARTS";
 ALTER TASK update_daily_active_users RESUME;
 ALTER TASK update_monthly_active_users RESUME;
 
-USE ROLE SYSADMIN;
+USE ROLE "SF_APA_SANDBOX-QUICKSTARTS";
 
-CREATE OR REPLACE VIEW PLAYER_360.ANALYTIC.ARPDAU AS
+CREATE OR REPLACE VIEW QUICKSTARTS_DB.PLAYER_360.ARPDAU AS
 SELECT
     dau.ACTIVE_DATE,
     -- Calculate total revenue for the day
@@ -507,9 +507,9 @@ SELECT
         0
     END AS arp_dau -- Average revenue per daily active user
 FROM
-    PLAYER_360.ANALYTIC.DAILY_ACTIVE_USERS dau
+    QUICKSTARTS_DB.PLAYER_360.DAILY_ACTIVE_USERS dau
 LEFT JOIN
-    PLAYER_360.RAW.PURCHASES p
+    QUICKSTARTS_DB.PLAYER_360.PURCHASES p
     ON CAST(p.TIMESTAMP_OF_PURCHASE AS DATE) = dau.ACTIVE_DATE
 GROUP BY
     dau.ACTIVE_DATE, dau.ACTIVE_USER_COUNT
@@ -517,7 +517,7 @@ ORDER BY
     dau.ACTIVE_DATE DESC; -- Optional: Sorting by the date in descending order
 
     
-CREATE OR REPLACE VIEW PLAYER_360.ANALYTIC.DARPPU AS 
+CREATE OR REPLACE VIEW QUICKSTARTS_DB.PLAYER_360.DARPPU AS 
 SELECT
     dau.ACTIVE_DATE,
     -- Calculate total revenue from paying users for the day
@@ -531,9 +531,9 @@ SELECT
         0
     END AS darppu
 FROM
-    PLAYER_360.ANALYTIC.DAILY_ACTIVE_USERS dau
+    QUICKSTARTS_DB.PLAYER_360.DAILY_ACTIVE_USERS dau
 LEFT JOIN
-    PLAYER_360.RAW.PURCHASES p
+    QUICKSTARTS_DB.PLAYER_360.PURCHASES p
     ON CAST(p.TIMESTAMP_OF_PURCHASE AS DATE) = dau.ACTIVE_DATE
     AND p.PURCHASE_TYPE != 'none' 
 GROUP BY
@@ -541,14 +541,14 @@ GROUP BY
 ORDER BY
     dau.ACTIVE_DATE DESC;
 
-CREATE OR REPLACE VIEW PLAYER_360.ANALYTIC.MONTHLY_CHURN_RATE AS
+CREATE OR REPLACE VIEW QUICKSTARTS_DB.PLAYER_360.MONTHLY_CHURN_RATE AS
 WITH ActiveUsers AS (
     -- Get all active users per month
     SELECT 
         EXTRACT(YEAR, LOG_IN) AS year,
         EXTRACT(MONTH, LOG_IN) AS month,
         USER_ID
-    FROM PLAYER_360.RAW.SESSIONS
+    FROM QUICKSTARTS_DB.PLAYER_360.SESSIONS
     GROUP BY EXTRACT(YEAR, LOG_IN), EXTRACT(MONTH, LOG_IN), USER_ID
 ),
 ChurnedUsers AS (
@@ -602,13 +602,13 @@ SELECT *
 FROM FilteredMonthlyStats
 ORDER BY year, month;
 
-CREATE OR REPLACE VIEW PLAYER_360.ANALYTIC.DAILY_CHURN_RATE AS
+CREATE OR REPLACE VIEW QUICKSTARTS_DB.PLAYER_360.DAILY_CHURN_RATE AS
 WITH ActiveUsers AS (
     -- Get all active users per day
     SELECT 
         DATE(LOG_IN) AS log_in_date,
         USER_ID
-    FROM PLAYER_360.RAW.SESSIONS
+    FROM QUICKSTARTS_DB.PLAYER_360.SESSIONS
     GROUP BY DATE(LOG_IN), USER_ID
 ),
 ChurnedUsers AS (
@@ -637,7 +637,7 @@ DailyStats AS (
 EarliestDate AS (
     -- Find the earliest date (the first active day)
     SELECT MIN(DATE(LOG_IN)) AS earliest_date
-    FROM PLAYER_360.RAW.SESSIONS
+    FROM QUICKSTARTS_DB.PLAYER_360.SESSIONS
 ),
 FilteredDailyStats AS (
     -- Filter out the first active day
@@ -661,7 +661,7 @@ SELECT
 FROM FilteredDailyStats
 ORDER BY log_in_date;
 
-CREATE OR REPLACE VIEW PLAYER_360.ANALYTIC.COHORT_CLTV AS
+CREATE OR REPLACE VIEW QUICKSTARTS_DB.PLAYER_360.COHORT_CLTV AS
 WITH CohortData AS (
     -- Step 1: Assign players to cohorts based on the month of account creation
     SELECT
@@ -672,9 +672,9 @@ WITH CohortData AS (
         p.TIMESTAMP_OF_PURCHASE,
         u.ACCOUNT_CREATION
     FROM
-        PLAYER_360.RAW.USERS u
+        QUICKSTARTS_DB.PLAYER_360.USERS u
     LEFT JOIN
-        PLAYER_360.RAW.PURCHASES p
+        QUICKSTARTS_DB.PLAYER_360.PURCHASES p
     ON
         u.USER_ID = p.USER_ID
     WHERE
@@ -738,13 +738,13 @@ ORDER BY
 WITH AdViewers AS (
     -- Step 1: Identify users who have interacted with ads, grouped by ad type
     SELECT DISTINCT USER_ID, AD_TYPE
-    FROM PLAYER_360.RAW.PURCHASES p
+    FROM QUICKSTARTS_DB.PLAYER_360.PURCHASES p
     WHERE p.AD_INTERACTION_ID IS NOT NULL
 ),
 AdConverters AS (
     -- Step 2: Identify users who interacted with ads and made a purchase, grouped by ad type
     SELECT DISTINCT p.USER_ID, p.AD_TYPE
-    FROM PLAYER_360.RAW.PURCHASES p
+    FROM QUICKSTARTS_DB.PLAYER_360.PURCHASES p
     WHERE p.AD_INTERACTION_ID IS NOT NULL AND p.PURCHASE_TYPE != 'none'
 )
 
@@ -760,14 +760,14 @@ FROM
 LEFT JOIN
     AdConverters ac ON av.USER_ID = ac.USER_ID AND av.AD_TYPE = ac.AD_TYPE
 LEFT JOIN
-    PLAYER_360.RAW.USERS u
+    QUICKSTARTS_DB.PLAYER_360.USERS u
 GROUP BY
     av.AD_TYPE
 ORDER BY
     PurchaseConversionRate DESC;
     
 -- NExt
-CREATE OR REPLACE VIEW PLAYER_360.ANALYTIC.AD_CONVERSION_OVER_TIME AS
+CREATE OR REPLACE VIEW QUICKSTARTS_DB.PLAYER_360.AD_CONVERSION_OVER_TIME AS
 SELECT
     TO_CHAR(p.TIMESTAMP_OF_PURCHASE, 'YYYY-MM') AS Month,  -- Extract month and year in 'YYYY-MM' format
     p.AD_TYPE,
@@ -775,7 +775,7 @@ SELECT
     COUNT(DISTINCT CASE WHEN p.PURCHASE_TYPE != 'none' THEN p.PURCHASE_ID END) AS PURCHASED_ADS,
     (COUNT(DISTINCT CASE WHEN p.PURCHASE_TYPE != 'none' THEN p.PURCHASE_ID END) * 1.0 / COUNT(p.AD_INTERACTION_ID)) AS Ad_Conversion_Rate
 FROM
-    PLAYER_360.RAW.PURCHASES p
+    QUICKSTARTS_DB.PLAYER_360.PURCHASES p
 GROUP BY
     TO_CHAR(p.TIMESTAMP_OF_PURCHASE, 'YYYY-MM'),  -- Group by month and year
     p.AD_TYPE

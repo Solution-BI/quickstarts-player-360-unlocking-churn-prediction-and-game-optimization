@@ -82,10 +82,10 @@ def create_pagination(dataset :pd.DataFrame, key :str):
     pagination.dataframe(data=pages[current_page - 1], use_container_width=True)
 
 
-users_df = load_table(f"{session.get_current_database()}.RAW.USERS")
-retention_df = load_query(f"SELECT * FROM {session.get_current_database()}.ANALYTIC.RETENTION")
-ranking_df = load_table(f"{session.get_current_database()}.ANALYTIC.USER_RANKINGS")
-demographics_df = load_query(f"SELECT * FROM {session.get_current_database()}.ANALYTIC.DEMOGRAPHICS" )
+users_df = load_table(f"{session.get_current_database()}.PLAYER_360.USERS")
+retention_df = load_query(f"SELECT * FROM {session.get_current_database()}.PLAYER_360.RETENTION")
+ranking_df = load_table(f"{session.get_current_database()}.PLAYER_360.USER_RANKINGS")
+demographics_df = load_query(f"SELECT * FROM {session.get_current_database()}.PLAYER_360.DEMOGRAPHICS" )
 
 active_users = retention_df[retention_df['CHURNED'] ==  0]
 inactive_users = retention_df[retention_df['CHURNED'] ==  1]
@@ -195,15 +195,15 @@ with st.sidebar:
         UserProfileCard(key=k, value=v).render_card()
 
     
-ad_engagement_df = load_query(f"SELECT * FROM {session.get_current_database()}.ANALYTIC.AD_ENGAGEMENT WHERE USER_ID = {user_id}")
+ad_engagement_df = load_query(f"SELECT * FROM {session.get_current_database()}.PLAYER_360.AD_ENGAGEMENT WHERE USER_ID = {user_id}")
 # load dataframes here
-achievements_df = load_query(f"SELECT * FROM {session.get_current_database()}.RAW.ACHIEVEMENTS WHERE USER_ID = {user_id}")
-player_events_points_df = load_query(f'SELECT * FROM {session.get_current_database()}.ANALYTIC.POINTS_PER_EVENT WHERE USER_ID = {user_id} ORDER BY LOG_IN ASC')
-support_ticket_df = load_table(f"{session.get_current_database()}.RAW.SUPPORT_TICKETS")
-sessions_df = load_query(f"SELECT * FROM {session.get_current_database()}.RAW.SESSIONS WHERE USER_ID = {user_id} ORDER BY LOG_IN ASC")
+achievements_df = load_query(f"SELECT * FROM {session.get_current_database()}.PLAYER_360.ACHIEVEMENTS WHERE USER_ID = {user_id}")
+player_events_points_df = load_query(f'SELECT * FROM {session.get_current_database()}.PLAYER_360.POINTS_PER_EVENT WHERE USER_ID = {user_id} ORDER BY LOG_IN ASC')
+support_ticket_df = load_table(f"{session.get_current_database()}.PLAYER_360.SUPPORT_TICKETS")
+sessions_df = load_query(f"SELECT * FROM {session.get_current_database()}.PLAYER_360.SESSIONS WHERE USER_ID = {user_id} ORDER BY LOG_IN ASC")
 
 # all ads
-purchases_df = load_query(f"SELECT * FROM {session.get_current_database()}.RAW.PURCHASES WHERE USER_ID = {user_id} ORDER BY TIMESTAMP_OF_PURCHASE ASC")
+purchases_df = load_query(f"SELECT * FROM {session.get_current_database()}.PLAYER_360.PURCHASES WHERE USER_ID = {user_id} ORDER BY TIMESTAMP_OF_PURCHASE ASC")
 # all ads that lead to purchases
 purchased_df = purchases_df[purchases_df['PURCHASE_TYPE'] != 'none']
 
@@ -652,13 +652,13 @@ def create_rolling_plot(x_col, y_cols, chart_df, title):
 with churn_likelihood:
     # ML Model
     if st.session_state.active_user == 0:
-        features_df = load_query(f"SELECT * FROM {session.get_current_database()}.APP.ROLLING_CHURN_FEATURES WHERE USER_ID = {user_id}")
+        features_df = load_query(f"SELECT * FROM {session.get_current_database()}.PLAYER_360.ROLLING_CHURN_FEATURES WHERE USER_ID = {user_id}")
         features_df['DAY'] = pd.to_datetime(features_df['DAY'])
         features_df = features_df[features_df['DAY'] >= start_date]
         chart_df = features_df
     else:
-        features_df = load_query(f"SELECT * FROM {session.get_current_database()}.APP.TO_BE_PREDICTED_CHURN_FEATURES WHERE USER_ID = {user_id}")
-        chart_df = load_query(f"SELECT * FROM {session.get_current_database()}.APP.ROLLING_CHURN_FEATURES WHERE USER_ID = {user_id}")
+        features_df = load_query(f"SELECT * FROM {session.get_current_database()}.PLAYER_360.TO_BE_PREDICTED_CHURN_FEATURES WHERE USER_ID = {user_id}")
+        chart_df = load_query(f"SELECT * FROM {session.get_current_database()}.PLAYER_360.ROLLING_CHURN_FEATURES WHERE USER_ID = {user_id}")
         chart_df['DAY'] = pd.to_datetime(chart_df['DAY'])
         chart_df = chart_df[chart_df['DAY'] >= start_date]
     

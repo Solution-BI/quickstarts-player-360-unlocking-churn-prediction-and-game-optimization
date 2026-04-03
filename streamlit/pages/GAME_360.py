@@ -153,7 +153,7 @@ def create_saved_pagination(dataset :pd.DataFrame, key :str):
                 session.write_pandas(df=filtered_df, 
                                      table_name="FILTERED_DF", 
                                      database=f"{session.get_current_database()}", 
-                                     schema="APP", 
+                                     schema="PLAYER_360", 
                                      quote_identifiers=False,
                                      auto_create_table=True,
                                      overwrite=True)
@@ -204,18 +204,18 @@ class AltairCharts():
     
 
 # load the dataframes
-dau_df = load_query(f"SELECT * FROM {session.get_current_database()}.ANALYTIC.DAILY_ACTIVE_USERS ORDER BY ACTIVE_DATE ASC")
+dau_df = load_query(f"SELECT * FROM {session.get_current_database()}.PLAYER_360.DAILY_ACTIVE_USERS ORDER BY ACTIVE_DATE ASC")
 mau_df = load_query(f"""SELECT 
                             TO_DATE(ACTIVE_MONTH) as ACTIVE_MONTH, 
                             ACTIVE_USER_COUNT,
-                        FROM {session.get_current_database()}.ANALYTIC.MONTHLY_ACTIVE_USERS ORDER BY ACTIVE_MONTH ASC""")
-dcr_df = load_query(f"SELECT LOG_IN_DATE AS DATE, CHURNED_USERS, ACTIVE_USERS, CHURN_RATE_PERCENTAGE FROM {session.get_current_database()}.ANALYTIC.DAILY_CHURN_RATE ORDER BY DATE ASC")
-mcr_df = load_query(f"SELECT DATE_FROM_PARTS(year, month, 1) AS DATE, CHURNED_USERS, ACTIVE_USERS, CHURN_RATE_PERCENTAGE FROM {session.get_current_database()}.ANALYTIC.MONTHLY_CHURN_RATE ORDER BY DATE ASC")
-arpdau_df = load_query(f"SELECT * FROM {session.get_current_database()}.ANALYTIC.ARPDAU ORDER BY ACTIVE_DATE ASC")
-darppu_df = load_query(f"SELECT * FROM {session.get_current_database()}.ANALYTIC.DARPPU ORDER BY ACTIVE_DATE ASC")
-cltv_cohort_df = load_query(f"SELECT * FROM {session.get_current_database()}.ANALYTIC.COHORT_CLTV ORDER BY TO_DATE(COHORT_MONTH || '-01', 'YYYY-MM-DD') ASC")
-ad_conversion_df = load_query(f"SELECT * FROM {session.get_current_database()}.ANALYTIC.AD_CONVERSION_OVER_TIME ORDER BY MONTH ASC")
-features_df = load_query(f"SELECT * FROM {session.get_current_database()}.APP.ROLLING_CHURN_FEATURES")
+                        FROM {session.get_current_database()}.PLAYER_360.MONTHLY_ACTIVE_USERS ORDER BY ACTIVE_MONTH ASC""")
+dcr_df = load_query(f"SELECT LOG_IN_DATE AS DATE, CHURNED_USERS, ACTIVE_USERS, CHURN_RATE_PERCENTAGE FROM {session.get_current_database()}.PLAYER_360.DAILY_CHURN_RATE ORDER BY DATE ASC")
+mcr_df = load_query(f"SELECT DATE_FROM_PARTS(year, month, 1) AS DATE, CHURNED_USERS, ACTIVE_USERS, CHURN_RATE_PERCENTAGE FROM {session.get_current_database()}.PLAYER_360.MONTHLY_CHURN_RATE ORDER BY DATE ASC")
+arpdau_df = load_query(f"SELECT * FROM {session.get_current_database()}.PLAYER_360.ARPDAU ORDER BY ACTIVE_DATE ASC")
+darppu_df = load_query(f"SELECT * FROM {session.get_current_database()}.PLAYER_360.DARPPU ORDER BY ACTIVE_DATE ASC")
+cltv_cohort_df = load_query(f"SELECT * FROM {session.get_current_database()}.PLAYER_360.COHORT_CLTV ORDER BY TO_DATE(COHORT_MONTH || '-01', 'YYYY-MM-DD') ASC")
+ad_conversion_df = load_query(f"SELECT * FROM {session.get_current_database()}.PLAYER_360.AD_CONVERSION_OVER_TIME ORDER BY MONTH ASC")
+features_df = load_query(f"SELECT * FROM {session.get_current_database()}.PLAYER_360.ROLLING_CHURN_FEATURES")
 eda_df = load_query(f"""SELECT 
                         r.user_id, 
                         r.total_logins,
@@ -252,11 +252,11 @@ eda_df = load_query(f"""SELECT
                         ae.average_purchase_amount,
                         ae.average_ad_engagement_time,
                         r.churned
-                        FROM {session.get_current_database()}.ANALYTIC.RETENTION r 
-                        JOIN {session.get_current_database()}.ANALYTIC.DEMOGRAPHICS d ON r.user_id = d.user_id 
-                        JOIN {session.get_current_database()}.ANALYTIC.USER_RANKINGS ur ON r.user_id = ur.user_id
-                        JOIN {session.get_current_database()}.RAW.ACHIEVEMENTS a ON r.user_id = a.user_id
-                        JOIN {session.get_current_database()}.ANALYTIC.AD_ENGAGEMENT ae ON r.user_id = ae.user_id
+                        FROM {session.get_current_database()}.PLAYER_360.RETENTION r 
+                        JOIN {session.get_current_database()}.PLAYER_360.DEMOGRAPHICS d ON r.user_id = d.user_id 
+                        JOIN {session.get_current_database()}.PLAYER_360.USER_RANKINGS ur ON r.user_id = ur.user_id
+                        JOIN {session.get_current_database()}.PLAYER_360.ACHIEVEMENTS a ON r.user_id = a.user_id
+                        JOIN {session.get_current_database()}.PLAYER_360.AD_ENGAGEMENT ae ON r.user_id = ae.user_id
                         """)
 
 components.html("""
