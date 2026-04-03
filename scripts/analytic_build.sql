@@ -1,5 +1,5 @@
 USE ROLE "SF_APA_SANDBOX-QUICKSTARTS";
-USE WAREHOUSE SANDBOX_DB;
+USE WAREHOUSE SANDBOX_WH;
 USE SCHEMA QUICKSTARTS_DB.PLAYER_360;
 
 -- 1. Create Dynamic Table Representing the Rentention Information
@@ -14,7 +14,7 @@ create or replace dynamic table QUICKSTARTS_DB.PLAYER_360.RETENTION(
 	LOGGED_IN_IN_LAST_30_DAYS,
 	DAYS_SINCE_LAST_LOGIN,
 	CHURNED
-) target_lag = '1 days' refresh_mode = AUTO initialize = ON_CREATE warehouse = SANDBOX_DB
+) target_lag = '1 days' refresh_mode = AUTO initialize = ON_CREATE warehouse = SANDBOX_WH
  as
 WITH first_login AS (
     SELECT
@@ -61,7 +61,7 @@ VALUES ('Assists', 0.2),
 
 -- 3. CREATE Dynamic Table Presenting Points Per Event
 CREATE OR REPLACE DYNAMIC TABLE QUICKSTARTS_DB.PLAYER_360.points_per_event
-WAREHOUSE = SANDBOX_DB
+WAREHOUSE = SANDBOX_WH
 TARGET_LAG = '5 minute'
 REFRESH_MODE = AUTO
 INITIALIZE = ON_CREATE
@@ -125,7 +125,7 @@ create or replace dynamic table QUICKSTARTS_DB.PLAYER_360.points_per_user
     TARGET_LAG = '5 minutes'
     refresh_mode = AUTO
     initialize = ON_CREATE
-    warehouse = SANDBOX_DB
+    warehouse = SANDBOX_WH
     as
 SELECT
     USER_ID,
@@ -216,7 +216,7 @@ CREATE OR REPLACE DYNAMIC TABLE QUICKSTARTS_DB.PLAYER_360.USER_RANKINGS(
     TOTAL_POINTS,
     RANK_NAME,
     PERCENTILE
-) TARGET_LAG = '1 days' refresh_mode = AUTO initialize = ON_CREATE warehouse = SANDBOX_DB
+) TARGET_LAG = '1 days' refresh_mode = AUTO initialize = ON_CREATE warehouse = SANDBOX_WH
 AS
 WITH RankedPlayers AS (
     SELECT
@@ -258,7 +258,7 @@ create or replace dynamic table QUICKSTARTS_DB.PLAYER_360.DEMOGRAPHICS(
 	IS_SPENDER,
 	AVG_PURCHASE_AMOUNT_PER_AD,
     HAS_SUPPORT_TICKET
-) TARGET_LAG = '1 days' refresh_mode = AUTO initialize = ON_CREATE warehouse = SANDBOX_DB
+) TARGET_LAG = '1 days' refresh_mode = AUTO initialize = ON_CREATE warehouse = SANDBOX_WH
  as
 WITH user_activity AS (
     -- Aggregate player activity to figure out if they are hardcore or casual
@@ -332,7 +332,7 @@ CREATE OR REPLACE DYNAMIC TABLE QUICKSTARTS_DB.PLAYER_360.AD_ENGAGEMENT (
 TARGET_LAG = '5 minutes' 
 REFRESH_MODE = AUTO 
 INITIALIZE = ON_CREATE 
-WAREHOUSE = SANDBOX_DB
+WAREHOUSE = SANDBOX_WH
 AS
 SELECT 
     USER_ID,
@@ -390,7 +390,7 @@ GROUP BY
     USER_ID;
 
 USE ROLE "SF_APA_SANDBOX-QUICKSTARTS";
-USE WAREHOUSE SANDBOX_DB;
+USE WAREHOUSE SANDBOX_WH;
 USE SCHEMA QUICKSTARTS_DB.PLAYER_360;
 
 CREATE OR REPLACE VIEW QUICKSTARTS_DB.PLAYER_360.country_count
@@ -421,12 +421,12 @@ ON dau.active_date = daily_activity.active_date
 -- If the record exists, update the count of active users, otherwise insert a new record
 WHEN MATCHED THEN 
     UPDATE SET dau.active_user_count = daily_activity.active_user_count
-WHEN NOT MATCHED THEN
+WHEN NOT MATCHEQUICKSTARTS_DB.PLAYER_360.NOTEBOOK_ROLLING_CHURN_PREDICTIONQUICKSTARTS_DB.PLAYER_360.NOTEBOOK_ROLLING_CHURN_PREDICTIOND THEN
     INSERT (active_date, active_user_count) 
     VALUES (daily_activity.active_date, daily_activity.active_user_count);
 
 CREATE OR REPLACE TASK update_daily_active_users
-  WAREHOUSE = SANDBOX_DB
+  WAREHOUSE = SANDBOX_WH
   SCHEDULE = 'USING CRON 0 0 * * * UTC' -- Runs daily at midnight UTC
 AS
     MERGE INTO QUICKSTARTS_DB.PLAYER_360.daily_active_users AS dau
@@ -469,7 +469,7 @@ WHEN NOT MATCHED THEN
     VALUES (monthly_activity.active_month, monthly_activity.active_user_count);
 
 CREATE OR REPLACE TASK update_monthly_active_users
-  WAREHOUSE = SANDBOX_DB
+  WAREHOUSE = SANDBOX_WH
   SCHEDULE = 'USING CRON 0 0 1 * * UTC' -- Runs on the 1st day of each month at midnight UTC
 AS
     MERGE INTO QUICKSTARTS_DB.PLAYER_360.monthly_active_users AS mau
@@ -489,7 +489,7 @@ AS
         VALUES (monthly_activity.active_month, monthly_activity.active_user_count);
 
 USE ROLE "SF_APA_SANDBOX-QUICKSTARTS";
-ALTER TASK update_daily_active_users RESUME;
+ALTER TASK update_daily_active_users RESUME; --> Script need to be granted to owner role
 ALTER TASK update_monthly_active_users RESUME;
 
 USE ROLE "SF_APA_SANDBOX-QUICKSTARTS";
